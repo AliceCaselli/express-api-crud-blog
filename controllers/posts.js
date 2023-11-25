@@ -1,5 +1,7 @@
 const posts = require("../db.js");
 const path = require("path");
+const fs = require("fs");
+const { kebabCase } = require("lodash");
 
 // Creiamo poi una rotta /posts che ritorni tramite content negotiation la lista dei post, da un array locale. Ritorniamo i dati sotto forma di json e html stampando una semplice ul.
 function index(req, res) {
@@ -109,10 +111,126 @@ function download(req, res) {
 }
 
 
+// / [POST] - rotta store del crud che riceverà dei dati e creerà un nuovo post. Questa dovrà riceve i dati in formato application/x-www-urlencoded e dovrà ritornare un redirect nel caso di richiesta html, altrimenti di default il json dell’elemento appena creato
+
+//registro il body-parser per "application/json"
+//app.use(express.json());
+
+//registro il body-parser per "application/x-www-form-urlencoded"
+//app.use(express.urlencoded({extended:true}));
+//app.post("/", (req,res) =>{
+//dentro re.body troveremo sia i dati ricevuti in formato json che x-www-form-urlencoded
+//console.log(req.body);
+//})
+
+function store(req, res) {
+
+    console.log(req.body);
+    //leggo il db che ho già importato in alto
+    //aggiungo il post al db
+    res.format({
+        html: () => {
+            res.redirect("/");
+        },
+
+        default: () => {
+            posts.push({
+                ...req.body,
+                slug: kebabCase(req.body.title),
+                updatedAt: new Date().toISOString(),
+                image: req.file
+            })
+        },
+    });
+
+    //converto il db in json
+    const json = JSON.stringify(posts, null, 2);
+
+    //scrivo il json su file
+    fs.writeFileSync(path.resolve(__dirname, "..", "db.js"), json);
+
+    res.json(posts[posts.length - 1]);
+
+}
+
+
+function showImage(req, res) {
+    const post = findOrFail(req, res);
+
+    if (typeof post.image === "string") {
+        const filePath = path.resolve(__dirname, "../public/imgs/posts", post.image);
+
+        res.sendFile(filePath);
+
+        return;
+    }
+
+    const filePath = path.resolve(__dirname, "..", post.image.path);
+
+    res.append("Content-Type", post.image.mimetype);
+
+    res.sendFile(filePath);
+
+};
+
+
+function destroy(req, res) {
+    res.format({
+        html: () => {
+            res.redirect("/");
+        },
+        default: () => {
+            const post = findOrFail(req, res);
+
+            const postIndex = posts.findIndex((_post) => _post.slug == post.slug);
+
+            posts.splice(postIndex, 1);
+
+            if (post.image) {
+                if (typeof post.image === "string") {
+                    const filePath = path.resolve(
+                        __dirname,
+                        "..",
+                        "public",
+                        "imgs",
+                        "posts",
+                        post.image
+                    );
+
+                    fs.unlinkSync(filePath);
+                } else {
+                    const filePath = path.resolve(__dirname, "..", post.image.path);
+
+                    fs.unlinkSync(filePath);
+                }
+            }
+            const json = JSON.stringify(posts, null, 2);
+            fs.writeFileSync(path.resolve(__dirname, "..", "db", "db.json"), json);
+
+            res.send("Post eliminato");
+        }
+    })
+
+};
 
 
 
 
+
+
+function findOrFail(req, res) {
+
+    const postSlug = req.params.slug;
+
+    const post = posts.find((post) => post.slug == postSlug);
+
+    if (!post) {
+        res.status(404).send(`Post con slug ${postSlug} non trovato!`);
+        return;
+    }
+
+    return post;
+}
 
 
 
@@ -121,4 +239,6 @@ module.exports = {
     show,
     create,
     download,
+    store,
+    showImage,
 }
