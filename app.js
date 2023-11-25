@@ -1,7 +1,14 @@
+// Per il nostro blog, concentriamoci sul creare 2 rotte:
+
+// /:slug [DELETE] - rotta destroy del crud che dovrà ritornare un 404 nel caso non sia stato trovato un post corrispondente. Ritornare un redirect nel caso di richiesta html, altrimenti di default del testo con scritto “post eliminato”
+// Tutte le funzioni delle rotte dovranno essere scritte nel controller dedicato.
+// Testare le rotte tramite Postman.
 // Bonus
-// Nella rotta show, aggiungere al post una proprietà image_url dove creare il link completo per l’immagine
-// Aggiungere un altra proprietà image_download_url che invece dovrà far scaricare l’immagine puntando alla rotta download
-// Rendere navigabili i post nella index, stampando un link per la show di ciascuno
+// Tramite una funzione, salvare l’array dei post nel file .json
+// nella funzione store permettere di passare i dati nel formato multipart/form-data tramite multer
+// permettere di eseguire l’upload dell’immagine principale del post.
+
+
 
 const express = require("express");
 const dotenv = require("dotenv");
@@ -10,6 +17,12 @@ const port = 8081;
 // const postController = require("./controllers/posts");
 const app = express();
 const routerPost = require("./routers/posts");
+
+//configuro express per leggere i dati in formato json
+app.use(express.json());
+
+//configuro express per leggere i dati in formato x-www-form-urlencoded
+app.use(express.urlencoded({ extended: true }));
 
 // Configuriamo gli asset statici sull’applicazione in modo che si possano visualizzare le immagini associate ad ogni post.
 app.use(express.static("public"));
