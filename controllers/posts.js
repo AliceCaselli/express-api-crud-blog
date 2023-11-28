@@ -1,4 +1,4 @@
-const posts = require("../db.js");
+const posts = require("../db.json");
 const path = require("path");
 const fs = require("fs");
 const { kebabCase } = require("lodash");
@@ -18,7 +18,7 @@ function index(req, res) {
                     `<li>
                         <h2>${post.title}</h2>
                         <p>${post.content}</p>
-                        <img src="/imgs/posts/${post.image}" alt="" style="width: 100px"
+                        <img src="/posts/${post.slug}/image" alt="" style="width: 100px"
                         </li>`);
             }
             html.push("</ul>");
@@ -31,7 +31,12 @@ function index(req, res) {
         json: () => {
             res.type("json").send({
                 totalPosts: posts.length,
-                list: posts
+
+                list: posts.map(post => {
+                    post.image_url = `/posts/${post.slug}/image`;
+
+                    return post
+                })
             });
         },
 
@@ -49,23 +54,20 @@ function show(req, res) {
 
     res.format({
         json: () => {
-            const postSlug = req.params.slug;
+            const post = findOrFail(req, res);
 
-            const post = posts.find((post) => post.slug == postSlug);
+            post.image_url = `/posts/${post.slug}/image`;
 
-            if (!post) {
-                res.status(404).send("Error");
-                return;
-            }
-
-            res.json(post);
             // console.log("ciao dalla show");
+            // console.log(post.image_url);
+
+            res.send(post);
 
         },
 
         default: () => {
             res.status(404).send("Error");
-            // console.log("ciao dalla show default");
+            console.log("ciao dalla show default");
 
         }
 
@@ -98,34 +100,18 @@ function create(req, res) {
 // /:slug/download - download: dovrà far scaricare l’immagine del post rappresentato dallo slug. Attenzione, se lo slug contiene il simbolo / la rotta non funzionerà. C’è qualche strumento che ci permette di codificare lo slug?
 function download(req, res) {
 
-    const postSlug = req.params.slug;
-    const post = posts.find((post) => post.slug == postSlug);
-
-    if (!post) {
-        res.status(404).send("Error");
-        return;
-    }
+    const post = findOrFail(req, res);
 
     const imagePath = path.join(__dirname, "../public/imgs/posts", post.image);
     res.download(imagePath, post.image);
 }
 
 
-// / [POST] - rotta store del crud che riceverà dei dati e creerà un nuovo post. Questa dovrà riceve i dati in formato application/x-www-urlencoded e dovrà ritornare un redirect nel caso di richiesta html, altrimenti di default il json dell’elemento appena creato
-
-//registro il body-parser per "application/json"
-//app.use(express.json());
-
-//registro il body-parser per "application/x-www-form-urlencoded"
-//app.use(express.urlencoded({extended:true}));
-//app.post("/", (req,res) =>{
-//dentro re.body troveremo sia i dati ricevuti in formato json che x-www-form-urlencoded
-//console.log(req.body);
-//})
-
+// [POST] - rotta store del crud che riceverà dei dati e creerà un nuovo post. Questa dovrà riceve i dati in formato application/x-www-urlencoded e dovrà ritornare un redirect nel caso di richiesta html, altrimenti di default il json dell’elemento appena creato
 function store(req, res) {
 
     console.log(req.body);
+    console.log(req.file);
     //leggo il db che ho già importato in alto
     //aggiungo il post al db
     res.format({
@@ -140,52 +126,40 @@ function store(req, res) {
                 updatedAt: new Date().toISOString(),
                 image: req.file
             })
+            //converto il db in json
+            const json = JSON.stringify(posts, null, 2);
+
+            //scrivo il json su file
+            fs.writeFileSync(path.resolve(__dirname, "..", "db.json"), json);
+
+            res.json(posts[posts.length - 1]);
         },
     });
 
-    //converto il db in json
-    const json = JSON.stringify(posts, null, 2);
-
-    //scrivo il json su file
-    fs.writeFileSync(path.resolve(__dirname, "..", "db.js"), json);
-
-    res.json(posts[posts.length - 1]);
 
 }
 
-
-function showImage(req, res) {
-    const post = findOrFail(req, res);
-
-    if (typeof post.image === "string") {
-        const filePath = path.resolve(__dirname, "../public/imgs/posts", post.image);
-
-        res.sendFile(filePath);
-
-        return;
-    }
-
-    const filePath = path.resolve(__dirname, "..", post.image.path);
-
-    res.append("Content-Type", post.image.mimetype);
-
-    res.sendFile(filePath);
-
-};
-
-
+// funzione delete
 function destroy(req, res) {
+
     res.format({
         html: () => {
             res.redirect("/");
         },
         default: () => {
+
             const post = findOrFail(req, res);
 
-            const postIndex = posts.findIndex((_post) => _post.slug == post.slug);
+            //trovo l'indice del post da eliminare
+            const postIndex = posts.findIndex(_post => _post.slug == post.slug)
 
+            // rimuovo il post dall'array
             posts.splice(postIndex, 1);
 
+            // converto il db in json
+            const json = JSON.stringify(posts, null, 2);
+
+            //cancello anche l'immagine associata al post
             if (post.image) {
                 if (typeof post.image === "string") {
                     const filePath = path.resolve(
@@ -204,17 +178,36 @@ function destroy(req, res) {
                     fs.unlinkSync(filePath);
                 }
             }
-            const json = JSON.stringify(posts, null, 2);
-            fs.writeFileSync(path.resolve(__dirname, "..", "db", "db.json"), json);
 
-            res.send("Post eliminato");
+            // scrivo il json su file
+            fs.writeFileSync(path.resolve(__dirname, "..", "db.json"), json);
+
+            res.send("Post eliminato")
         }
     })
-
 };
 
 
 
+
+function showImage(req, res) {
+    const post = findOrFail(req, res);
+
+    if (typeof post.image === "string") {
+        const filePath = path.resolve(__dirname, "../public/imgs/posts", post.image);
+
+        res.sendFile(filePath);
+
+        return;
+    }
+
+    const filePath = path.resolve(__dirname, "..", post.image.path);
+
+    res.append("Content-Type", post.image.mimetype);
+    console.log(filePath);
+    res.sendFile(filePath);
+
+};
 
 
 
@@ -241,4 +234,5 @@ module.exports = {
     download,
     store,
     showImage,
+    destroy,
 }

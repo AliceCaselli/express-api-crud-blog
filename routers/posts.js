@@ -12,10 +12,10 @@ router.get("/:slug", postController.show);
 
 router.get("/:slug/download", postController.download);
 
-router.get("/:slug/image", postController.showImage);
-
 router.post("/", multer({ dest: "public/imgs/posts" }).single("image"), postController.store);
 
-router.delete("/:slug", postsController.destroy)
+router.get("/:slug/image", postController.showImage);
+
+router.delete("/:slug", postController.destroy)
 
 module.exports = router;
